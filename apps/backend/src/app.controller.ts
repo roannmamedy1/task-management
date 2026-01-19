@@ -1,4 +1,4 @@
-import { Controller, Get, Res, BadRequestException, OnModuleInit, Logger } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Res, BadRequestException, OnModuleInit, Logger, Body, Param } from '@nestjs/common';
 import { Response } from 'express'; 
 import { AppService } from './app.service';
 import { SupabaseService } from './supabase/supabase.service';
@@ -208,5 +208,93 @@ export class AppController implements OnModuleInit {
     res.on('close', () => {
       this.adminDataSubscribers.delete(res);
     });
+  }
+
+  @Post('task')
+  async createTask(@Body() body: { title: string; status?: string }) {
+    if (!body.title || body.title.trim() === '') {
+      throw new BadRequestException('Title is required');
+    }
+
+    const client = this.supabaseService.getClient();
+    const { data, error } = await client
+      .from('task')
+      .insert([
+        {
+          title: body.title.trim(),
+          status: body.status || 'open',
+        },
+      ])
+      .select();
+
+    if (error) {
+      throw new BadRequestException(error.message);
+    }
+
+    return {
+      success: true,
+      data: data?.[0] || null,
+    };
+  }
+
+  @Put('task/:id')
+  async updateTask(
+    @Param('id') id: string,
+    @Body() body: { title?: string; status?: string }
+  ) {
+    if (!id) {
+      throw new BadRequestException('ID is required');
+    }
+
+    const client = this.supabaseService.getClient();
+    const updateData: any = {};
+
+    if (body.title !== undefined) {
+      if (body.title.trim() === '') {
+        throw new BadRequestException('Title cannot be empty');
+      }
+      updateData.title = body.title.trim();
+    }
+
+    if (body.status !== undefined) {
+      updateData.status = body.status;
+    }
+
+    const { data, error } = await client
+      .from('task')
+      .update(updateData)
+      .eq('id', parseInt(id, 10))
+      .select();
+
+    if (error) {
+      throw new BadRequestException(error.message);
+    }
+
+    return {
+      success: true,
+      data: data?.[0] || null,
+    };
+  }
+
+  @Delete('task/:id')
+  async deleteTask(@Param('id') id: string) {
+    if (!id) {
+      throw new BadRequestException('ID is required');
+    }
+
+    const client = this.supabaseService.getClient();
+    const { error } = await client
+      .from('task')
+      .delete()
+      .eq('id', parseInt(id, 10));
+
+    if (error) {
+      throw new BadRequestException(error.message);
+    }
+
+    return {
+      success: true,
+      message: 'Task deleted successfully',
+    };
   }
 }
