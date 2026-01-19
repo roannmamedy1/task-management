@@ -1,4 +1,5 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 
 type Task = {
   id: number;
@@ -6,7 +7,7 @@ type Task = {
   status: boolean;
 };
 
-const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
+const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -14,14 +15,46 @@ export default function Home() {
   const [isError, setIsError] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<
-    'connecting' | 'connected' | 'disconnected'
-  >('connecting');
+    "connecting" | "connected" | "disconnected"
+  >("connecting");
+
+  const navigate = useNavigate();
+
+  const checkAuth = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("sb-access-token");
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(`${API_BASE}/auth/check`, {
+        method: "GET",
+        headers,
+      });
+
+      if (!response.ok) {
+        throw new Error("Not authenticated");
+      }
+    } catch {
+      navigate("/login");
+    }
+  }, [navigate]);
 
   useEffect(() => {
-    const eventSource = new EventSource(`${API_BASE}/stream/tasks`);
+    checkAuth();
+  }, [checkAuth]);
+
+  useEffect(() => {
+    const token = localStorage.getItem("sb-access-token");
+    const streamUrl = token
+      ? `${API_BASE}/stream/tasks?access_token=${encodeURIComponent(token)}`
+      : `${API_BASE}/stream/tasks`;
+
+    const eventSource = new EventSource(streamUrl);
 
     eventSource.onopen = () => {
-      setConnectionStatus('connected');
+      setConnectionStatus("connected");
       setIsLoading(false);
       setIsError(false);
     };
@@ -33,20 +66,20 @@ export default function Home() {
           setTasks(
             data.map((task) => ({
               id: Number(task.id),
-              title: task.title ?? 'Untitled task',
-              status: task.status === true || task.status === 'done',
-            }))
+              title: task.title ?? "Untitled task",
+              status: task.status === true || task.status === "done",
+            })),
           );
         }
       } catch (err) {
-        console.error('Failed to parse stream data:', err);
+        console.error("Failed to parse stream data:", err);
       }
     };
 
     eventSource.onerror = () => {
-      setConnectionStatus('disconnected');
+      setConnectionStatus("disconnected");
       setIsError(true);
-      setError(new Error('Connection lost. Reconnecting...'));
+      setError(new Error("Connection lost. Reconnecting..."));
       eventSource.close();
     };
 
@@ -64,7 +97,7 @@ export default function Home() {
   }, [tasks]);
 
   const handleReconnect = () => {
-    setConnectionStatus('connecting');
+    setConnectionStatus("connecting");
     setIsError(false);
     setError(null);
     // The useEffect will automatically try to reconnect
@@ -74,7 +107,10 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <div className="relative isolate overflow-hidden">
-        <div className="absolute inset-x-0 top-[-10rem] -z-10 transform-gpu blur-3xl" aria-hidden>
+        <div
+          className="absolute inset-x-0 top-[-10rem] -z-10 transform-gpu blur-3xl"
+          aria-hidden
+        >
           <div className="mx-auto h-[24rem] w-[36rem] bg-gradient-to-r from-indigo-500/40 via-cyan-400/30 to-emerald-400/40 opacity-60" />
         </div>
 
@@ -84,36 +120,38 @@ export default function Home() {
               <p className="text-sm uppercase tracking-[0.2em] text-slate-400">
                 Live Supabase Data (Real-time via SSE)
               </p>
-              <h1 className="text-4xl md:text-5xl font-semibold mt-2">Task Control Room</h1>
+              <h1 className="text-4xl md:text-5xl font-semibold mt-2">
+                Task Control Room
+              </h1>
               <p className="mt-3 text-slate-400 max-w-xl">
-                Powered by NestJS + Supabase + Server-Sent Events. Data updates instantly when
-                database changes.
+                Powered by NestJS + Supabase + Server-Sent Events. Data updates
+                instantly when database changes.
               </p>
             </div>
             <div className="flex items-center gap-3">
               <div
                 className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm font-semibold ${
-                  connectionStatus === 'connected'
-                    ? 'bg-emerald-500/20 text-emerald-100'
-                    : connectionStatus === 'connecting'
-                      ? 'bg-amber-500/20 text-amber-100'
-                      : 'bg-rose-500/20 text-rose-100'
+                  connectionStatus === "connected"
+                    ? "bg-emerald-500/20 text-emerald-100"
+                    : connectionStatus === "connecting"
+                      ? "bg-amber-500/20 text-amber-100"
+                      : "bg-rose-500/20 text-rose-100"
                 }`}
               >
                 <span
                   className={`h-2 w-2 rounded-full animate-pulse ${
-                    connectionStatus === 'connected'
-                      ? 'bg-emerald-400'
-                      : connectionStatus === 'connecting'
-                        ? 'bg-amber-400'
-                        : 'bg-rose-400'
+                    connectionStatus === "connected"
+                      ? "bg-emerald-400"
+                      : connectionStatus === "connecting"
+                        ? "bg-amber-400"
+                        : "bg-rose-400"
                   }`}
                 />
-                {connectionStatus === 'connected'
-                  ? 'Connected'
-                  : connectionStatus === 'connecting'
-                    ? 'Connecting...'
-                    : 'Disconnected'}
+                {connectionStatus === "connected"
+                  ? "Connected"
+                  : connectionStatus === "connecting"
+                    ? "Connecting..."
+                    : "Disconnected"}
               </div>
               {isError && (
                 <button
@@ -137,11 +175,17 @@ export default function Home() {
               value={stats.completed}
               accent="bg-emerald-500/20 text-emerald-100"
             />
-            <StatCard label="Open" value={stats.open} accent="bg-amber-500/20 text-amber-100" />
+            <StatCard
+              label="Open"
+              value={stats.open}
+              accent="bg-amber-500/20 text-amber-100"
+            />
             <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-lg shadow-black/30">
               <div className="flex items-center justify-between text-sm text-slate-400">
                 <span>Completion</span>
-                <span className="text-slate-200 font-semibold">{stats.completionRate}%</span>
+                <span className="text-slate-200 font-semibold">
+                  {stats.completionRate}%
+                </span>
               </div>
               <div className="mt-3 h-2 rounded-full bg-slate-800">
                 <div
@@ -149,15 +193,19 @@ export default function Home() {
                   style={{ width: `${stats.completionRate}%` }}
                 />
               </div>
-              <p className="mt-2 text-xs text-slate-500">Real-time from SSE stream</p>
+              <p className="mt-2 text-xs text-slate-500">
+                Real-time from SSE stream
+              </p>
             </div>
           </section>
 
           <section className="mt-10">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold text-white">Tasks</h2>
-              {connectionStatus === 'connected' && (
-                <span className="text-xs text-cyan-300">Live updates enabled</span>
+              {connectionStatus === "connected" && (
+                <span className="text-xs text-cyan-300">
+                  Live updates enabled
+                </span>
               )}
             </div>
 
@@ -165,7 +213,11 @@ export default function Home() {
               <TaskSkeletonList />
             ) : isError ? (
               <ErrorCard
-                message={error instanceof Error ? error.message : 'Unable to reach backend'}
+                message={
+                  error instanceof Error
+                    ? error.message
+                    : "Unable to reach backend"
+                }
                 onRetry={handleReconnect}
               />
             ) : tasks.length === 0 ? (
@@ -182,15 +234,19 @@ export default function Home() {
                       <span
                         className={`mt-1 inline-flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${
                           task.status
-                            ? 'bg-emerald-500/20 text-emerald-100'
-                            : 'bg-amber-500/20 text-amber-100'
+                            ? "bg-emerald-500/20 text-emerald-100"
+                            : "bg-amber-500/20 text-amber-100"
                         }`}
                       >
                         #{task.id}
                       </span>
                       <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-white">{task.title}</h3>
-                        <p className="text-sm text-slate-400 mt-1">Real-time from Supabase</p>
+                        <h3 className="text-lg font-semibold text-white">
+                          {task.title}
+                        </h3>
+                        <p className="text-sm text-slate-400 mt-1">
+                          Real-time from Supabase
+                        </p>
                       </div>
                       <StatusPill done={task.status} />
                     </div>
@@ -205,7 +261,15 @@ export default function Home() {
   );
 }
 
-function StatCard({ label, value, accent }: { label: string; value: number; accent: string }) {
+function StatCard({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: number;
+  accent: string;
+}) {
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-lg shadow-black/30">
       <p className="text-sm text-slate-400">{label}</p>
@@ -222,12 +286,14 @@ function StatusPill({ done }: { done: boolean }) {
     <span
       className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold transition ${
         done
-          ? 'bg-emerald-500/15 text-emerald-100 ring-1 ring-emerald-500/30'
-          : 'bg-amber-500/15 text-amber-100 ring-1 ring-amber-500/30'
+          ? "bg-emerald-500/15 text-emerald-100 ring-1 ring-emerald-500/30"
+          : "bg-amber-500/15 text-amber-100 ring-1 ring-amber-500/30"
       }`}
     >
-      <span className={`h-2 w-2 rounded-full ${done ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-      {done ? 'Done' : 'Open'}
+      <span
+        className={`h-2 w-2 rounded-full ${done ? "bg-emerald-400" : "bg-amber-400"}`}
+      />
+      {done ? "Done" : "Open"}
     </span>
   );
 }
@@ -254,7 +320,13 @@ function TaskSkeletonList() {
   );
 }
 
-function ErrorCard({ message, onRetry }: { message: string; onRetry: () => void }) {
+function ErrorCard({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void;
+}) {
   return (
     <div className="rounded-2xl border border-rose-400/40 bg-rose-900/30 p-6 text-rose-50 shadow-lg shadow-rose-900/30">
       <p className="text-lg font-semibold">Connection Lost</p>

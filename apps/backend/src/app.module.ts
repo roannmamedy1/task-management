@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { SupabaseModule } from './supabase/supabase.module';
+import { SupabaseAuthModule } from './supabaseAuth/supabaseAuth.module';
 
 @Module({
   imports: [
@@ -11,6 +12,7 @@ import { SupabaseModule } from './supabase/supabase.module';
       envFilePath: '.env',
     }),
     SupabaseModule,
+    SupabaseAuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],

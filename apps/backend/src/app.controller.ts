@@ -1,7 +1,21 @@
-import { Controller, Get, Post, Put, Delete, Res, BadRequestException, OnModuleInit, Logger, Body, Param } from '@nestjs/common';
-import { Response } from 'express'; 
-import { AppService } from './app.service';
-import { SupabaseService } from './supabase/supabase.service';
+import {
+  Controller,
+  Get,
+  Res,
+  OnModuleInit,
+  Logger,
+  UseGuards,
+  Post,
+  Body,
+  Put,
+  Param,
+  Delete,
+  BadRequestException,
+} from "@nestjs/common";
+import { Response } from "express";
+import { AppService } from "./app.service";
+import { SupabaseService } from "./supabase/supabase.service";
+import { SupabaseAuthGuard } from "./supabaseAuth/supabaseAuth.guard";
 
 @Controller()
 export class AppController implements OnModuleInit {
@@ -13,7 +27,7 @@ export class AppController implements OnModuleInit {
 
   constructor(
     private readonly appService: AppService,
-    private readonly supabaseService: SupabaseService
+    private readonly supabaseService: SupabaseService,
   ) {}
 
   onModuleInit() {
@@ -25,24 +39,24 @@ export class AppController implements OnModuleInit {
     const client = this.supabaseService.getClient();
 
     // Subscribe to real-time changes
-    const channel = client.channel('realtime:public:task').on(
-      'postgres_changes',
+    const channel = client.channel("realtime:public:task").on(
+      "postgres_changes",
       {
-        event: '*',
-        schema: 'public',
-        table: 'task',
+        event: "*",
+        schema: "public",
+        table: "task",
       },
       (payload: any) => {
-        this.logger.log('Real-time update received from Supabase');
+        this.logger.log("Real-time update received from Supabase");
         this.broadcastUpdate();
-      }
+      },
     );
 
     channel.subscribe((status: string) => {
-      if (status === 'SUBSCRIBED') {
-        this.logger.log('Successfully subscribed to real-time updates');
-      } else if (status === 'CHANNEL_ERROR') {
-        this.logger.error('Failed to subscribe to real-time channel');
+      if (status === "SUBSCRIBED") {
+        this.logger.log("Successfully subscribed to real-time updates");
+      } else if (status === "CHANNEL_ERROR") {
+        this.logger.error("Failed to subscribe to real-time channel");
       }
     });
   }
@@ -59,17 +73,23 @@ export class AppController implements OnModuleInit {
       const client = this.supabaseService.getClient();
 
       // Fetch latest task data
-      const { data: taskData } = await client.from('task').select('*');
+      const { data: taskData } = await client.from("task").select("*");
       const transformedTaskData = taskData?.map((task) => ({
         id: task.id,
         title: task.title,
-        status: task.status === 'done',
+        status: task.status === "done",
       }));
 
       // Check if data changed and broadcast to task subscribers
-      if (JSON.stringify(transformedTaskData) !== JSON.stringify(this.lastTaskData)) {
+      if (
+        JSON.stringify(transformedTaskData) !==
+        JSON.stringify(this.lastTaskData)
+      ) {
         this.lastTaskData = transformedTaskData;
-        this.broadcastToSubscribers(this.taskDataSubscribers, transformedTaskData);
+        this.broadcastToSubscribers(
+          this.taskDataSubscribers,
+          transformedTaskData,
+        );
       }
 
       // Check if admin data changed and broadcast
@@ -78,7 +98,7 @@ export class AppController implements OnModuleInit {
         this.broadcastToSubscribers(this.adminDataSubscribers, taskData);
       }
     } catch (error) {
-      this.logger.error('Error broadcasting update:', error);
+      this.logger.error("Error broadcasting update:", error);
     }
   }
 
@@ -103,29 +123,34 @@ export class AppController implements OnModuleInit {
     });
   }
 
+  @UseGuards(SupabaseAuthGuard)
   @Get()
   getHello(): string {
     return this.appService.getHello();
   }
 
-  @Get('health')
+  @Get("health")
   healthCheck(): string {
-    return 'OK';
+    return "OK";
   }
 
-  @Get('supabase-test')
+  @Get("supabase-test")
   async supabaseTest() {
     const client = this.supabaseService.getClient();
     return {
       success: true,
-      message: 'Supabase client is connected',
+      message: "Supabase client is connected",
       clientInitialized: !!client,
     };
   }
 
-  @Get('task-data')
+  @UseGuards(SupabaseAuthGuard)
+  @Get("task-data")
   async getTaskData() {
-    const { data, error } = await this.supabaseService.getClient().from('task').select('*');
+    const { data, error } = await this.supabaseService
+      .getClient()
+      .from("task")
+      .select("*");
 
     if (error) {
       return { success: false, error: error.message };
@@ -134,13 +159,16 @@ export class AppController implements OnModuleInit {
     return data.map((task) => ({
       id: task.id,
       title: task.title,
-      status: task.status === 'done',
+      status: task.status === "done",
     }));
   }
-
-  @Get('admin-data')
+  @UseGuards(SupabaseAuthGuard)
+  @Get("admin-data")
   async getAdminData() {
-    const { data, error } = await this.supabaseService.getClient().from('task').select('*');
+    const { data, error } = await this.supabaseService
+      .getClient()
+      .from("task")
+      .select("*");
 
     if (error) {
       return { success: false, error: error.message };
@@ -148,14 +176,14 @@ export class AppController implements OnModuleInit {
 
     return data;
   }
-
-  @Get('stream/tasks')
+  @UseGuards(SupabaseAuthGuard)
+  @Get("stream/tasks")
   streamTasks(@Res() res: Response) {
     // Set SSE headers
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("Access-Control-Allow-Origin", "*");
 
     // Add this response to subscribers
     this.taskDataSubscribers.add(res);
@@ -163,13 +191,13 @@ export class AppController implements OnModuleInit {
     // Send initial data
     this.supabaseService
       .getClient()
-      .from('task')
-      .select('*')
+      .from("task")
+      .select("*")
       .then(({ data }) => {
         const taskData = data?.map((task) => ({
           id: task.id,
           title: task.title,
-          status: task.status === 'done',
+          status: task.status === "done",
         }));
         if (!res.writableEnded) {
           res.write(`data: ${JSON.stringify(taskData)}\n\n`);
@@ -177,18 +205,18 @@ export class AppController implements OnModuleInit {
       });
 
     // Handle client disconnect
-    res.on('close', () => {
+    res.on("close", () => {
       this.taskDataSubscribers.delete(res);
     });
   }
-
-  @Get('stream/admin')
+  @UseGuards(SupabaseAuthGuard)
+  @Get("stream/admin")
   streamAdmin(@Res() res: Response) {
     // Set SSE headers
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("Access-Control-Allow-Origin", "*");
 
     // Add this response to subscribers
     this.adminDataSubscribers.add(res);
@@ -196,8 +224,8 @@ export class AppController implements OnModuleInit {
     // Send initial data
     this.supabaseService
       .getClient()
-      .from('task')
-      .select('*')
+      .from("task")
+      .select("*")
       .then(({ data }) => {
         if (!res.writableEnded) {
           res.write(`data: ${JSON.stringify(data)}\n\n`);
@@ -205,24 +233,24 @@ export class AppController implements OnModuleInit {
       });
 
     // Handle client disconnect
-    res.on('close', () => {
+    res.on("close", () => {
       this.adminDataSubscribers.delete(res);
     });
   }
 
-  @Post('task')
+  @Post("task")
   async createTask(@Body() body: { title: string; status?: string }) {
-    if (!body.title || body.title.trim() === '') {
-      throw new BadRequestException('Title is required');
+    if (!body.title || body.title.trim() === "") {
+      throw new BadRequestException("Title is required");
     }
 
     const client = this.supabaseService.getClient();
     const { data, error } = await client
-      .from('task')
+      .from("task")
       .insert([
         {
           title: body.title.trim(),
-          status: body.status || 'open',
+          status: body.status || "open",
         },
       ])
       .select();
@@ -237,21 +265,21 @@ export class AppController implements OnModuleInit {
     };
   }
 
-  @Put('task/:id')
+  @Put("task/:id")
   async updateTask(
-    @Param('id') id: string,
-    @Body() body: { title?: string; status?: string }
+    @Param("id") id: string,
+    @Body() body: { title?: string; status?: string },
   ) {
     if (!id) {
-      throw new BadRequestException('ID is required');
+      throw new BadRequestException("ID is required");
     }
 
     const client = this.supabaseService.getClient();
     const updateData: any = {};
 
     if (body.title !== undefined) {
-      if (body.title.trim() === '') {
-        throw new BadRequestException('Title cannot be empty');
+      if (body.title.trim() === "") {
+        throw new BadRequestException("Title cannot be empty");
       }
       updateData.title = body.title.trim();
     }
@@ -261,9 +289,9 @@ export class AppController implements OnModuleInit {
     }
 
     const { data, error } = await client
-      .from('task')
+      .from("task")
       .update(updateData)
-      .eq('id', parseInt(id, 10))
+      .eq("id", parseInt(id, 10))
       .select();
 
     if (error) {
@@ -276,17 +304,17 @@ export class AppController implements OnModuleInit {
     };
   }
 
-  @Delete('task/:id')
-  async deleteTask(@Param('id') id: string) {
+  @Delete("task/:id")
+  async deleteTask(@Param("id") id: string) {
     if (!id) {
-      throw new BadRequestException('ID is required');
+      throw new BadRequestException("ID is required");
     }
 
     const client = this.supabaseService.getClient();
     const { error } = await client
-      .from('task')
+      .from("task")
       .delete()
-      .eq('id', parseInt(id, 10));
+      .eq("id", parseInt(id, 10));
 
     if (error) {
       throw new BadRequestException(error.message);
@@ -294,7 +322,7 @@ export class AppController implements OnModuleInit {
 
     return {
       success: true,
-      message: 'Task deleted successfully',
+      message: "Task deleted successfully",
     };
   }
 }

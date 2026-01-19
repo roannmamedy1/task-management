@@ -1,7 +1,13 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
-import { Button } from './ui/button';
-import { Trash2, Edit2, Plus, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useMemo } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "./ui/dialog";
+import { Button } from "./ui/button";
+import { Trash2, Edit2, Plus, AlertCircle } from "lucide-react";
 
 type Task = {
   id: number;
@@ -9,23 +15,30 @@ type Task = {
   status: boolean;
 };
 
-const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
+const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
 export default function TaskManager() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isError, setIsError] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
+  const [connectionStatus, setConnectionStatus] = useState<
+    "connecting" | "connected" | "disconnected"
+  >("connecting");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   useEffect(() => {
-    const eventSource = new EventSource(`${API_BASE}/stream/tasks`);
+    const token = localStorage.getItem("sb-access-token");
+    const streamUrl = token
+      ? `${API_BASE}/stream/tasks?access_token=${encodeURIComponent(token)}`
+      : `${API_BASE}/stream/tasks`;
+
+    const eventSource = new EventSource(streamUrl);
 
     eventSource.onopen = () => {
-      setConnectionStatus('connected');
+      setConnectionStatus("connected");
       setIsLoading(false);
       setIsError(false);
     };
@@ -37,20 +50,20 @@ export default function TaskManager() {
           setTasks(
             data.map((task) => ({
               id: Number(task.id),
-              title: task.title ?? 'Untitled task',
-              status: task.status === true || task.status === 'done',
-            }))
+              title: task.title ?? "Untitled task",
+              status: task.status === true || task.status === "done",
+            })),
           );
         }
       } catch (err) {
-        console.error('Failed to parse stream data:', err);
+        console.error("Failed to parse stream data:", err);
       }
     };
 
     eventSource.onerror = () => {
-      setConnectionStatus('disconnected');
+      setConnectionStatus("disconnected");
       setIsError(true);
-      setError(new Error('Connection lost. Reconnecting...'));
+      setError(new Error("Connection lost. Reconnecting..."));
       eventSource.close();
     };
 
@@ -68,7 +81,7 @@ export default function TaskManager() {
   }, [tasks]);
 
   const handleReconnect = () => {
-    setConnectionStatus('connecting');
+    setConnectionStatus("connecting");
     setIsError(false);
     setError(null);
     window.location.reload();
@@ -77,7 +90,10 @@ export default function TaskManager() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <div className="relative isolate overflow-hidden">
-        <div className="absolute inset-x-0 top-[-10rem] -z-10 transform-gpu blur-3xl" aria-hidden>
+        <div
+          className="absolute inset-x-0 top-[-10rem] -z-10 transform-gpu blur-3xl"
+          aria-hidden
+        >
           <div className="mx-auto h-[24rem] w-[36rem] bg-gradient-to-r from-indigo-500/40 via-cyan-400/30 to-emerald-400/40 opacity-60" />
         </div>
 
@@ -87,35 +103,38 @@ export default function TaskManager() {
               <p className="text-sm uppercase tracking-[0.2em] text-slate-400">
                 Live Supabase Data (Real-time via SSE)
               </p>
-              <h1 className="text-4xl md:text-5xl font-semibold mt-2">Task Control Room</h1>
+              <h1 className="text-4xl md:text-5xl font-semibold mt-2">
+                Task Control Room
+              </h1>
               <p className="mt-3 text-slate-400 max-w-xl">
-                Powered by NestJS + Supabase + Server-Sent Events. Manage your tasks in real-time.
+                Powered by NestJS + Supabase + Server-Sent Events. Manage your
+                tasks in real-time.
               </p>
             </div>
             <div className="flex items-center gap-3">
               <div
                 className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm font-semibold ${
-                  connectionStatus === 'connected'
-                    ? 'bg-emerald-500/20 text-emerald-100'
-                    : connectionStatus === 'connecting'
-                      ? 'bg-amber-500/20 text-amber-100'
-                      : 'bg-rose-500/20 text-rose-100'
+                  connectionStatus === "connected"
+                    ? "bg-emerald-500/20 text-emerald-100"
+                    : connectionStatus === "connecting"
+                      ? "bg-amber-500/20 text-amber-100"
+                      : "bg-rose-500/20 text-rose-100"
                 }`}
               >
                 <span
                   className={`h-2 w-2 rounded-full animate-pulse ${
-                    connectionStatus === 'connected'
-                      ? 'bg-emerald-400'
-                      : connectionStatus === 'connecting'
-                        ? 'bg-amber-400'
-                        : 'bg-rose-400'
+                    connectionStatus === "connected"
+                      ? "bg-emerald-400"
+                      : connectionStatus === "connecting"
+                        ? "bg-amber-400"
+                        : "bg-rose-400"
                   }`}
                 />
-                {connectionStatus === 'connected'
-                  ? 'Connected'
-                  : connectionStatus === 'connecting'
-                    ? 'Connecting...'
-                    : 'Disconnected'}
+                {connectionStatus === "connected"
+                  ? "Connected"
+                  : connectionStatus === "connecting"
+                    ? "Connecting..."
+                    : "Disconnected"}
               </div>
               {isError && (
                 <button
@@ -139,11 +158,17 @@ export default function TaskManager() {
               value={stats.completed}
               accent="bg-emerald-500/20 text-emerald-100"
             />
-            <StatCard label="Open" value={stats.open} accent="bg-amber-500/20 text-amber-100" />
+            <StatCard
+              label="Open"
+              value={stats.open}
+              accent="bg-amber-500/20 text-amber-100"
+            />
             <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-lg shadow-black/30">
               <div className="flex items-center justify-between text-sm text-slate-400">
                 <span>Completion</span>
-                <span className="text-slate-200 font-semibold">{stats.completionRate}%</span>
+                <span className="text-slate-200 font-semibold">
+                  {stats.completionRate}%
+                </span>
               </div>
               <div className="mt-3 h-2 rounded-full bg-slate-800">
                 <div
@@ -151,7 +176,9 @@ export default function TaskManager() {
                   style={{ width: `${stats.completionRate}%` }}
                 />
               </div>
-              <p className="mt-2 text-xs text-slate-500">Real-time from SSE stream</p>
+              <p className="mt-2 text-xs text-slate-500">
+                Real-time from SSE stream
+              </p>
             </div>
           </section>
 
@@ -159,8 +186,10 @@ export default function TaskManager() {
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-xl font-semibold text-white">Tasks</h2>
-                {connectionStatus === 'connected' && (
-                  <span className="text-xs text-cyan-300 mt-1 block">Live updates enabled</span>
+                {connectionStatus === "connected" && (
+                  <span className="text-xs text-cyan-300 mt-1 block">
+                    Live updates enabled
+                  </span>
                 )}
               </div>
               <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
@@ -172,7 +201,9 @@ export default function TaskManager() {
                 </DialogTrigger>
                 <DialogContent className="bg-slate-900 border-slate-800">
                   <DialogHeader>
-                    <DialogTitle className="text-white">Add New Task</DialogTitle>
+                    <DialogTitle className="text-white">
+                      Add New Task
+                    </DialogTitle>
                   </DialogHeader>
                   <AddTaskForm onSuccess={() => setIsAddDialogOpen(false)} />
                 </DialogContent>
@@ -182,7 +213,14 @@ export default function TaskManager() {
             {isLoading ? (
               <TaskSkeletonList />
             ) : isError ? (
-              <ErrorCard message={error instanceof Error ? error.message : 'Unable to reach backend'} onRetry={handleReconnect} />
+              <ErrorCard
+                message={
+                  error instanceof Error
+                    ? error.message
+                    : "Unable to reach backend"
+                }
+                onRetry={handleReconnect}
+              />
             ) : tasks.length === 0 ? (
               <EmptyState onRetry={handleReconnect} />
             ) : (
@@ -223,24 +261,30 @@ export default function TaskManager() {
   );
 }
 
-function TaskCard({ task, onEdit }: { task: Task; onEdit: (task: Task) => void }) {
+function TaskCard({
+  task,
+  onEdit,
+}: {
+  task: Task;
+  onEdit: (task: Task) => void;
+}) {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDelete = async () => {
-    if (!window.confirm('Are you sure you want to delete this task?')) return;
+    if (!window.confirm("Are you sure you want to delete this task?")) return;
 
     setIsDeleting(true);
     try {
       const response = await fetch(`${API_BASE}/task/${task.id}`, {
-        method: 'DELETE',
+        method: "DELETE",
       });
 
       if (!response.ok) {
-        throw new Error('Failed to delete task');
+        throw new Error("Failed to delete task");
       }
     } catch (err) {
-      console.error('Delete error:', err);
-      alert('Failed to delete task');
+      console.error("Delete error:", err);
+      alert("Failed to delete task");
     } finally {
       setIsDeleting(false);
     }
@@ -248,19 +292,19 @@ function TaskCard({ task, onEdit }: { task: Task; onEdit: (task: Task) => void }
 
   const handleStatusToggle = async () => {
     try {
-      const newStatus = task.status ? 'open' : 'done';
+      const newStatus = task.status ? "open" : "done";
       const response = await fetch(`${API_BASE}/task/${task.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update task');
+        throw new Error("Failed to update task");
       }
     } catch (err) {
-      console.error('Update error:', err);
-      alert('Failed to update task');
+      console.error("Update error:", err);
+      alert("Failed to update task");
     }
   };
 
@@ -268,11 +312,15 @@ function TaskCard({ task, onEdit }: { task: Task; onEdit: (task: Task) => void }
     <article className="group relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/70 p-5 shadow-lg shadow-black/30 transition hover:-translate-y-1 hover:border-cyan-400/60 animate-in fade-in duration-300">
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/50 to-transparent opacity-60" />
       <div className="flex items-start gap-3">
-        <span className={`mt-1 inline-flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${task.status ? 'bg-emerald-500/20 text-emerald-100' : 'bg-amber-500/20 text-amber-100'}`}>
+        <span
+          className={`mt-1 inline-flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${task.status ? "bg-emerald-500/20 text-emerald-100" : "bg-amber-500/20 text-amber-100"}`}
+        >
           #{task.id}
         </span>
         <div className="flex-1">
-          <h3 className={`text-lg font-semibold ${task.status ? 'line-through text-slate-400' : 'text-white'}`}>
+          <h3
+            className={`text-lg font-semibold ${task.status ? "line-through text-slate-400" : "text-white"}`}
+          >
             {task.title}
           </h3>
           <p className="text-sm text-slate-400 mt-1">Real-time from Supabase</p>
@@ -299,7 +347,7 @@ function TaskCard({ task, onEdit }: { task: Task; onEdit: (task: Task) => void }
           className="flex-1"
         >
           <Trash2 className="w-4 h-4 mr-2" />
-          {isDeleting ? 'Deleting...' : 'Delete'}
+          {isDeleting ? "Deleting..." : "Delete"}
         </Button>
       </div>
     </article>
@@ -307,14 +355,14 @@ function TaskCard({ task, onEdit }: { task: Task; onEdit: (task: Task) => void }
 }
 
 function AddTaskForm({ onSuccess }: { onSuccess: () => void }) {
-  const [title, setTitle] = useState('');
+  const [title, setTitle] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
-      setError('Title cannot be empty');
+      setError("Title cannot be empty");
       return;
     }
 
@@ -323,20 +371,20 @@ function AddTaskForm({ onSuccess }: { onSuccess: () => void }) {
 
     try {
       const response = await fetch(`${API_BASE}/task`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: title.trim() }),
       });
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.message || 'Failed to create task');
+        throw new Error(data.message || "Failed to create task");
       }
 
-      setTitle('');
+      setTitle("");
       onSuccess();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setIsLoading(false);
     }
@@ -345,7 +393,9 @@ function AddTaskForm({ onSuccess }: { onSuccess: () => void }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <label className="block text-sm font-medium text-slate-300 mb-2">Task Title</label>
+        <label className="block text-sm font-medium text-slate-300 mb-2">
+          Task Title
+        </label>
         <input
           type="text"
           value={title}
@@ -366,23 +416,29 @@ function AddTaskForm({ onSuccess }: { onSuccess: () => void }) {
       )}
       <div className="flex gap-3 justify-end">
         <Button type="submit" disabled={isLoading} className="gap-2">
-          {isLoading ? 'Creating...' : 'Create Task'}
+          {isLoading ? "Creating..." : "Create Task"}
         </Button>
       </div>
     </form>
   );
 }
 
-function EditTaskForm({ task, onSuccess }: { task: Task; onSuccess: () => void }) {
+function EditTaskForm({
+  task,
+  onSuccess,
+}: {
+  task: Task;
+  onSuccess: () => void;
+}) {
   const [title, setTitle] = useState(task.title);
-  const [status, setStatus] = useState(task.status ? 'done' : 'open');
+  const [status, setStatus] = useState(task.status ? "done" : "open");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
-      setError('Title cannot be empty');
+      setError("Title cannot be empty");
       return;
     }
 
@@ -391,19 +447,19 @@ function EditTaskForm({ task, onSuccess }: { task: Task; onSuccess: () => void }
 
     try {
       const response = await fetch(`${API_BASE}/task/${task.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: title.trim(), status }),
       });
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.message || 'Failed to update task');
+        throw new Error(data.message || "Failed to update task");
       }
 
       onSuccess();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setIsLoading(false);
     }
@@ -412,7 +468,9 @@ function EditTaskForm({ task, onSuccess }: { task: Task; onSuccess: () => void }
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <label className="block text-sm font-medium text-slate-300 mb-2">Task Title</label>
+        <label className="block text-sm font-medium text-slate-300 mb-2">
+          Task Title
+        </label>
         <input
           type="text"
           value={title}
@@ -426,7 +484,9 @@ function EditTaskForm({ task, onSuccess }: { task: Task; onSuccess: () => void }
         />
       </div>
       <div>
-        <label className="block text-sm font-medium text-slate-300 mb-2">Status</label>
+        <label className="block text-sm font-medium text-slate-300 mb-2">
+          Status
+        </label>
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value)}
@@ -445,14 +505,22 @@ function EditTaskForm({ task, onSuccess }: { task: Task; onSuccess: () => void }
       )}
       <div className="flex gap-3 justify-end">
         <Button type="submit" disabled={isLoading} className="gap-2">
-          {isLoading ? 'Updating...' : 'Update Task'}
+          {isLoading ? "Updating..." : "Update Task"}
         </Button>
       </div>
     </form>
   );
 }
 
-function StatCard({ label, value, accent }: { label: string; value: number; accent: string }) {
+function StatCard({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: number;
+  accent: string;
+}) {
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-lg shadow-black/30">
       <p className="text-sm text-slate-400">{label}</p>
@@ -464,18 +532,26 @@ function StatCard({ label, value, accent }: { label: string; value: number; acce
   );
 }
 
-function StatusPill({ done, onClick }: { done: boolean; onClick?: () => void }) {
+function StatusPill({
+  done,
+  onClick,
+}: {
+  done: boolean;
+  onClick?: () => void;
+}) {
   return (
     <button
       onClick={onClick}
       className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold transition cursor-pointer ${
         done
-          ? 'bg-emerald-500/15 text-emerald-100 ring-1 ring-emerald-500/30 hover:bg-emerald-500/25'
-          : 'bg-amber-500/15 text-amber-100 ring-1 ring-amber-500/30 hover:bg-amber-500/25'
+          ? "bg-emerald-500/15 text-emerald-100 ring-1 ring-emerald-500/30 hover:bg-emerald-500/25"
+          : "bg-amber-500/15 text-amber-100 ring-1 ring-amber-500/30 hover:bg-amber-500/25"
       }`}
     >
-      <span className={`h-2 w-2 rounded-full ${done ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-      {done ? 'Done' : 'Open'}
+      <span
+        className={`h-2 w-2 rounded-full ${done ? "bg-emerald-400" : "bg-amber-400"}`}
+      />
+      {done ? "Done" : "Open"}
     </button>
   );
 }
@@ -502,7 +578,13 @@ function TaskSkeletonList() {
   );
 }
 
-function ErrorCard({ message, onRetry }: { message: string; onRetry: () => void }) {
+function ErrorCard({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void;
+}) {
   return (
     <div className="rounded-2xl border border-rose-400/40 bg-rose-900/30 p-6 text-rose-50 shadow-lg shadow-rose-900/30">
       <p className="text-lg font-semibold flex items-center gap-2">
@@ -525,7 +607,8 @@ function EmptyState({ onRetry }: { onRetry: () => void }) {
     <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-8 text-center text-slate-200 shadow-lg shadow-black/30">
       <p className="text-lg font-semibold">No tasks found</p>
       <p className="mt-2 text-sm text-slate-400">
-        Backend responded with an empty list. Add your first task to get started.
+        Backend responded with an empty list. Add your first task to get
+        started.
       </p>
       <button
         onClick={onRetry}
